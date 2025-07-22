@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, Settings, Activity, Thermometer, Gauge, Zap, Clock, RotateCcw, Wifi, WifiOff, TrendingUp, AlertCircle, Upload, FileText, RefreshCw, Download, X } from 'lucide-react';
-
+/* Removed Utilization box from metrics panel */
 const SparkMindaDashboard = () => {
   // API Configuration
   const API_BASE_URL = 'http://localhost:5000/api';
@@ -35,6 +35,13 @@ const SparkMindaDashboard = () => {
   const [tiltingAngleThreshold, setTiltingAngleThreshold] = useState(35);
   const [tiltingSpeedThreshold, setTiltingSpeedThreshold] = useState(25);
   const [topDieTempThreshold, setTopDieTempThreshold] = useState(370);
+
+  // Add state for lower threshold
+  const [metalTempLowerThreshold, setMetalTempLowerThreshold] = useState(700);
+  const [solidificationTimeLowerThreshold, setSolidificationTimeLowerThreshold] = useState(40);
+  const [tiltingAngleLowerThreshold, setTiltingAngleLowerThreshold] = useState(20);
+  const [tiltingSpeedLowerThreshold, setTiltingSpeedLowerThreshold] = useState(10);
+  const [topDieTempLowerThreshold, setTopDieTempLowerThreshold] = useState(300);
 
   // Machine options
   const [machines, setMachines] = useState([
@@ -289,35 +296,50 @@ const SparkMindaDashboard = () => {
 
   const getCurrentThreshold = () => {
     switch(selectedParameter) {
-      case 'metal_temperature': return metalTempThreshold;
-      case 'solidification_time': return solidificationTimeThreshold;
-      case 'tilting_angle': return tiltingAngleThreshold;
-      case 'tilting_speed': return tiltingSpeedThreshold;
-      case 'top_die_temperature': return topDieTempThreshold;
-      default: return metalTempThreshold;
+      case 'metal_temperature': 
+        return { upper: metalTempThreshold, lower: metalTempLowerThreshold };
+      case 'solidification_time': 
+        return { upper: solidificationTimeThreshold, lower: solidificationTimeLowerThreshold };
+      case 'tilting_angle': 
+        return { upper: tiltingAngleThreshold, lower: tiltingAngleLowerThreshold };
+      case 'tilting_speed': 
+        return { upper: tiltingSpeedThreshold, lower: tiltingSpeedLowerThreshold };
+      case 'top_die_temperature': 
+        return { upper: topDieTempThreshold, lower: topDieTempLowerThreshold };
+      default: 
+        return { upper: metalTempThreshold, lower: metalTempLowerThreshold };
     }
   };
 
-  const updateThreshold = (value) => {
+  const updateThreshold = (type, value) => {
     switch(selectedParameter) {
-      case 'metal_temperature': setMetalTempThreshold(value); break;
-      case 'solidification_time': setSolidificationTimeThreshold(value); break;
-      case 'tilting_angle': setTiltingAngleThreshold(value); break;
-      case 'tilting_speed': setTiltingSpeedThreshold(value); break;
-      case 'top_die_temperature': setTopDieTempThreshold(value); break;
+      case 'metal_temperature': 
+        type === 'upper' ? setMetalTempThreshold(value) : setMetalTempLowerThreshold(value); 
+        break;
+      case 'solidification_time': 
+        type === 'upper' ? setSolidificationTimeThreshold(value) : setSolidificationTimeLowerThreshold(value); 
+        break;
+      case 'tilting_angle': 
+        type === 'upper' ? setTiltingAngleThreshold(value) : setTiltingAngleLowerThreshold(value); 
+        break;
+      case 'tilting_speed': 
+        type === 'upper' ? setTiltingSpeedThreshold(value) : setTiltingSpeedLowerThreshold(value); 
+        break;
+      case 'top_die_temperature': 
+        type === 'upper' ? setTopDieTempThreshold(value) : setTopDieTempLowerThreshold(value); 
+        break;
       default: break;
     }
   };
 
   // Check for threshold violations
   const checkAlerts = () => {
-    const currentData = getCurrentData();
-    if (currentData.length === 0) return false;
-    
-    const latestReading = currentData[currentData.length - 1];
+    const currentDataArr = getCurrentData();
+    if (currentDataArr.length === 0) return false;
+    const latestReading = currentDataArr[currentDataArr.length - 1];
     const parameterValue = latestReading[selectedParameter];
-    
-    return parameterValue > getCurrentThreshold();
+    const { upper, lower } = getCurrentThreshold();
+    return parameterValue > upper || parameterValue < lower;
   };
 
   // Dismiss alert
@@ -501,14 +523,6 @@ const SparkMindaDashboard = () => {
                     <p className="text-3xl font-bold text-green-400">{machineMetrics.total_strokes || 0}</p>
                     <p className="text-sm text-gray-400">Production count</p>
                   </div>
-                  <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-blue-500/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-blue-300">Utilization</h3>
-                      <Gauge className="w-5 h-5 text-purple-400" />
-                    </div>
-                    <p className="text-3xl font-bold text-purple-400">{machineMetrics.machine_utilization || 0}%</p>
-                    <p className="text-sm text-gray-400">Machine efficiency</p>
-                  </div>
                 </React.Fragment>
               )
             ))}
@@ -548,13 +562,22 @@ const SparkMindaDashboard = () => {
           {/* Threshold Setting */}
           <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-blue-500/20">
             <h3 className="text-lg font-semibold mb-4 text-blue-300">Threshold</h3>
-            <input
-              type="number"
-              value={getCurrentThreshold()}
-              onChange={(e) => updateThreshold(parseInt(e.target.value))}
-              className="w-full bg-slate-800/50 border border-blue-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-400 transition-colors"
-              placeholder="Set threshold"
-            />
+            <div className="flex flex-col gap-2">
+              <input
+                type="number"
+                value={getCurrentThreshold().upper}
+                onChange={(e) => updateThreshold('upper', parseInt(e.target.value))}
+                className="w-full bg-slate-800/50 border border-blue-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-400 transition-colors mb-2"
+                placeholder="Set upper threshold"
+              />
+              <input
+                type="number"
+                value={getCurrentThreshold().lower}
+                onChange={(e) => updateThreshold('lower', parseInt(e.target.value))}
+                className="w-full bg-slate-800/50 border border-blue-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-400 transition-colors"
+                placeholder="Set lower threshold"
+              />
+            </div>
           </div>
 
           {/* Current Status */}
@@ -576,38 +599,6 @@ const SparkMindaDashboard = () => {
           </div>
         </div>
 
-        {/* Real-time Data Display */}
-        {currentData[selectedMachine] && (
-          <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-blue-500/20 mb-8">
-            <h3 className="text-xl font-semibold mb-6 text-blue-300">Real-time Data - {selectedMachine}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              {availableFeatures.map((feature, index) => {
-                const parameterInfo = parameters.find(p => p.value === feature);
-                const IconComponent = parameterInfo?.icon || Thermometer;
-                const value = currentData[selectedMachine][feature] || 0;
-                
-                return (
-                  <div key={feature} className="bg-slate-800/50 rounded-lg p-4">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <IconComponent className="w-4 h-4 text-blue-400" />
-                      <span className="text-sm text-gray-300">
-                        {feature.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </span>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-400">
-                      {typeof value === 'number' ? value.toFixed(1) : value}
-                      {feature.includes('temperature') ? '°C' : 
-                       feature.includes('time') ? 'm' : 
-                       feature.includes('angle') ? '°' : 
-                       feature.includes('speed') ? ' rpm' : ''}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Main Chart */}
         <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-blue-500/20 mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -618,7 +609,9 @@ const SparkMindaDashboard = () => {
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
               <span className="text-sm text-gray-300">Predicted Values</span>
               <div className="w-3 h-3 bg-red-500 rounded-full ml-4"></div>
-              <span className="text-sm text-gray-300">Threshold</span>
+              <span className="text-sm text-gray-300">Upper Threshold</span>
+              <div className="w-3 h-3 bg-yellow-500 rounded-full ml-4"></div>
+              <span className="text-sm text-gray-300">Lower Threshold</span>
             </div>
           </div>
           <div className="h-96">
@@ -646,11 +639,19 @@ const SparkMindaDashboard = () => {
                 />
                 <Line 
                   type="monotone"
-                  dataKey={() => getCurrentThreshold()}
+                  dataKey={() => getCurrentThreshold().upper}
                   stroke="#EF4444"
                   strokeDasharray="5 5"
                   dot={false}
-                  name="Threshold"
+                  name="Upper Threshold"
+                />
+                <Line 
+                  type="monotone"
+                  dataKey={() => getCurrentThreshold().lower}
+                  stroke="#FBBF24"
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="Lower Threshold"
                 />
               </LineChart>
             </ResponsiveContainer>
